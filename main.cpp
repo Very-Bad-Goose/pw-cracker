@@ -1,45 +1,60 @@
 #include <iostream>
 #include <string>
-#include <thread>
-#include <vector>
-#include <algorithm>
+#include <cstring>
+#include <cstdlib>
+#include <fstream>
+#include <openssl/md5.h>
 
-bool password_cracker(const std::string& password, const std::string& hash)
-{
-    // simulate cracking the password hash
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    return password == hash;
+using namespace std;
+
+void print_hex(unsigned char* hash, int size) {
+    for (int i = 0; i < size; ++i) {
+        printf("%02x", hash[i]);
+    }
+    printf("\n");
 }
 
-int main()
-{
-    std::string hash = "5f4dcc3b5aa765d61d8327deb882cf99"; // md5 hash of "password"
+int main(int argc, char *argv[]) {
+    unsigned char md5_hash[MD5_DIGEST_LENGTH];
+    char input[1024];
+    string hash_str;
 
-    std::vector<std::string> passwords = {"password", "123456", "qwerty", "letmein", "monkey",
-                                          "football", "starwars", "iloveyou", "admin", "welcome",
-                                          "hello", "charlie", "123123", "dragon", "baseball"};
-
-    std::vector<std::thread> threads;
-    bool found = false;
-
-    // create and start threads to crack passwords
-    for (const auto& password : passwords)
-    {
-        threads.emplace_back([&found, &password, &hash]() {
-            if (password_cracker(password, hash))
-            {
-                std::cout << "Password found: " << password << std::endl;
-                found = true;
-            }
-        });
+    // Ask user to enter a password to hash or a hash string to crack
+    if (argc == 1) {
+        cout << "Enter a password to hash: ";
+        cin.getline(input, sizeof(input));
+        MD5((unsigned char*) input, strlen(input), md5_hash);
+        cout << "Hash: ";
+        print_hex(md5_hash, MD5_DIGEST_LENGTH);
+    } else if (argc == 2) {
+        hash_str = argv[1];
+        if (hash_str.length() != MD5_DIGEST_LENGTH * 2) {
+            cerr << "Invalid hash string" << endl;
+            return 1;
+        }
+        for (int i = 0; i < MD5_DIGEST_LENGTH; i++) {
+            sscanf(hash_str.substr(i * 2, 2).c_str(), "%02x", &md5_hash[i]);
+        }
+    } else {
+        cerr << "Usage: " << argv[0] << " [hash_string]" << endl;
+        return 1;
     }
 
-    // wait for all threads to finish
-    std::for_each(threads.begin(), threads.end(), [](std::thread& t) { t.join(); });
+    // Read the dictionary file
+    ifstream dictionary("dictionary.txt");
+    if (!dictionary.is_open()) {
+        cerr << "Error: dictionary.txt not found" << endl;
+        return 1;
+    }
 
-    if (!found)
-    {
-        std::cout << "Password not found" << std::endl;
+    // Crack the hash
+    string word;
+    while (getline(dictionary, word)) {
+        MD5((unsigned char*) word.c_str(), word.length(), md5_hash);
+        if (memcmp(md5_hash, md5_hash, MD5_DIGEST_LENGTH) == 0) {
+            cout << "Password: " << word << endl;
+            break;
+        }
     }
 
     return 0;
